@@ -2,8 +2,29 @@ import {
   CONTACT_FIELDS,
   contactInputSchema,
   formDataToValues,
+  isBlankAddressRow,
   zodFieldErrors,
 } from "@/lib/contacts/schema";
+
+describe("isBlankAddressRow", () => {
+  const blank = {
+    type: "Home",
+    street: "",
+    city: "  ",
+    state: "",
+    postal_code: "",
+    country: "",
+  };
+
+  it("treats an all-blank row as a placeholder regardless of type", () => {
+    expect(isBlankAddressRow(blank)).toBe(true);
+    expect(isBlankAddressRow({ ...blank, type: "Work" })).toBe(true);
+  });
+
+  it("keeps a row once any field is filled in", () => {
+    expect(isBlankAddressRow({ ...blank, city: "London" })).toBe(false);
+  });
+});
 
 function values(
   overrides: Record<string, string> = {},

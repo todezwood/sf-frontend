@@ -15,6 +15,7 @@ import {
   contactInputSchema,
   formDataToAddresses,
   formDataToValues,
+  isBlankAddressRow,
   zodFieldErrors,
 } from "@/lib/contacts/schema";
 import type { Contact, FormState } from "@/lib/contacts/types";
@@ -81,7 +82,10 @@ export async function saveContactAction(
   formData: FormData,
 ): Promise<FormState> {
   const values = formDataToValues(formData);
-  const addressValues = formDataToAddresses(formData);
+  // Untouched placeholder rows are not addresses — don't store blanks.
+  const addressValues = formDataToAddresses(formData).filter(
+    (row) => !isBlankAddressRow(row),
+  );
 
   const resolved = await resolvePhoto(formData, contactId);
   if (!resolved.ok) {

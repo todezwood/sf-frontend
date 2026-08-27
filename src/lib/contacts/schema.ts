@@ -213,6 +213,20 @@ export function formDataToValues(
 }
 
 /**
+ * A row whose every text field is blank is the form's placeholder row, not
+ * an address the user entered — saving it would store an empty Home address.
+ */
+export function isBlankAddressRow(row: AddressFormValues): boolean {
+  return (
+    !row.street.trim() &&
+    !row.city.trim() &&
+    !row.state.trim() &&
+    !row.postal_code.trim() &&
+    !row.country.trim()
+  );
+}
+
+/**
  * Pull the indexed address rows (`addresses[0][city]`, …) out of a submitted
  * form, as raw strings. Row order follows the form; a row exists as long as
  * its `type` select was submitted.
