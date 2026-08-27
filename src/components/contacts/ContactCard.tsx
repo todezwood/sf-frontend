@@ -15,7 +15,8 @@ export default function ContactCard({
 }: {
   contact: Contact;
   stats: ContactStats;
-  qrDataUrl: string;
+  /** Null when even the slimmest vCard outgrew the QR symbol. */
+  qrDataUrl: string | null;
 }) {
   const style = { "--card-hue": avatarHue(contact.email) } as CSSProperties;
   const subtitle = jobLine(contact);
@@ -23,7 +24,7 @@ export default function ContactCard({
   return (
     <div
       style={style}
-      className="w-[340px] rounded-2xl border border-white/20 bg-[linear-gradient(160deg,hsl(var(--card-hue)_50%_26%),hsl(var(--card-hue)_65%_10%))] p-6 text-white shadow-2xl"
+      className="w-full max-w-[340px] rounded-2xl border border-white/20 bg-[linear-gradient(160deg,hsl(var(--card-hue)_50%_26%),hsl(var(--card-hue)_65%_10%))] p-6 text-white shadow-2xl"
     >
       <div className="flex items-start justify-between">
         <div>
@@ -73,14 +74,18 @@ export default function ContactCard({
 
       <div className="mt-5 flex items-end justify-between gap-4">
         <p className="text-[12px] leading-snug text-white/70">
-          Scan to add {contact.first_name} to your phone&apos;s contacts.
+          {qrDataUrl
+            ? `Scan to add ${contact.first_name} to your phone's contacts.`
+            : "This record outgrew a QR code — grab the vCard download instead."}
         </p>
-        {/* eslint-disable-next-line @next/next/no-img-element -- generated QR data URL */}
-        <img
-          src={qrDataUrl}
-          alt={`QR code holding ${contact.full_name}'s contact card`}
-          className="h-24 w-24 shrink-0 rounded-md bg-white p-1.5"
-        />
+        {qrDataUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- generated QR data URL
+          <img
+            src={qrDataUrl}
+            alt={`QR code holding ${contact.full_name}'s contact card`}
+            className="h-24 w-24 shrink-0 rounded-md bg-white p-1.5"
+          />
+        ) : null}
       </div>
     </div>
   );
