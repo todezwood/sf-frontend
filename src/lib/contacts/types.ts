@@ -18,6 +18,7 @@ export interface Contact {
   postal_code: string | null;
   country: string | null;
   notes: string | null;
+  photo: string | null;
   created_at: string;
   updated_at: string;
   full_name: string;
@@ -77,6 +78,8 @@ export type FormState = {
   fieldErrors?: Partial<Record<keyof ContactInput, string>>;
   /** Echo of the submitted values so the form survives a failed round trip. */
   values?: Partial<Record<keyof ContactInput, string>>;
+  /** An explicit photo-removal request, remembered across a failed submit. */
+  photoRemoved?: boolean;
 };
 
 export const EMPTY_FORM_STATE: FormState = { status: "idle" };

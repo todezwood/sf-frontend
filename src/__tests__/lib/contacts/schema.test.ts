@@ -23,6 +23,30 @@ function values(overrides: Record<string, string> = {}) {
   };
 }
 
+describe("contactInputSchema photo rule", () => {
+  it("accepts an image data URL and defaults to null", () => {
+    const photo = "data:image/png;base64,iVBORw0KGgo=";
+    expect(contactInputSchema.parse({ ...values(), photo }).photo).toBe(photo);
+    expect(contactInputSchema.parse(values()).photo).toBeNull();
+  });
+
+  it("rejects an SVG data URL", () => {
+    const result = contactInputSchema.safeParse({
+      ...values(),
+      photo: "data:image/svg+xml;base64,PHN2Zy8+",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an oversized photo", () => {
+    const result = contactInputSchema.safeParse({
+      ...values(),
+      photo: `data:image/png;base64,${"A".repeat(2_000_000)}`,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe("contactInputSchema", () => {
   it("lowercases the email and nulls out the blanks", () => {
     const parsed = contactInputSchema.parse(values());
