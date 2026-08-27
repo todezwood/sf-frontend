@@ -64,7 +64,7 @@ export default function ContactCard({
       <dl className="mt-4 grid grid-cols-4 gap-2 text-center">
         {STAT_LABELS.map(({ key, label }) => (
           <div key={key}>
-            <dt className="text-[11px] uppercase tracking-widest text-white/60">
+            <dt className="text-[10px] uppercase tracking-wide text-white/60">
               {label}
             </dt>
             <dd className="font-display text-2xl font-bold">{stats[key]}</dd>
