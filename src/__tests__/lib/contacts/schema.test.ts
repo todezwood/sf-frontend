@@ -5,7 +5,10 @@ import {
   zodFieldErrors,
 } from "@/lib/contacts/schema";
 
-function values(overrides: Record<string, string> = {}) {
+function values(
+  overrides: Record<string, string> = {},
+  addresses: unknown[] = [],
+) {
   return {
     first_name: "Ada",
     last_name: "Lovelace",
@@ -13,12 +16,8 @@ function values(overrides: Record<string, string> = {}) {
     phone: "",
     company: "",
     job_title: "",
-    address: "",
-    city: "",
-    state: "",
-    postal_code: "",
-    country: "",
     notes: "",
+    addresses,
     ...overrides,
   };
 }
@@ -82,13 +81,41 @@ describe("contactInputSchema", () => {
 
   it("enforces the API's length limits", () => {
     const result = contactInputSchema.safeParse(
-      values({ first_name: "a".repeat(101), postal_code: "9".repeat(21) }),
+      values({ first_name: "a".repeat(101), company: "c".repeat(201) }),
     );
 
     expect(zodFieldErrors(result.error!)).toEqual({
       first_name: "First name must be 100 characters or fewer",
-      postal_code: "Postal code must be 20 characters or fewer",
+      company: "Company must be 200 characters or fewer",
     });
+  });
+
+  it("validates nested address rows and caps the list", () => {
+    const good = contactInputSchema.parse(
+      values({}, [{ type: "Work", city: "San Francisco" }]),
+    );
+    expect(good.addresses).toEqual([
+      {
+        type: "Work",
+        street: null,
+        city: "San Francisco",
+        state: null,
+        postal_code: null,
+        country: null,
+      },
+    ]);
+
+    const badType = contactInputSchema.safeParse(
+      values({}, [{ type: "Castle" }]),
+    );
+    expect(badType.success).toBe(false);
+
+    const tooMany = contactInputSchema.safeParse(
+      values({}, Array.from({ length: 11 }, () => ({ type: "Home" }))),
+    );
+    expect(zodFieldErrors(tooMany.error!).addresses).toBe(
+      "A contact can have at most 10 addresses",
+    );
   });
 });
 

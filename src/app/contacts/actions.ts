@@ -13,6 +13,7 @@ import {
 } from "@/lib/contacts/api";
 import {
   contactInputSchema,
+  formDataToAddresses,
   formDataToValues,
   zodFieldErrors,
 } from "@/lib/contacts/schema";
@@ -80,6 +81,7 @@ export async function saveContactAction(
   formData: FormData,
 ): Promise<FormState> {
   const values = formDataToValues(formData);
+  const addressValues = formDataToAddresses(formData);
 
   const resolved = await resolvePhoto(formData, contactId);
   if (!resolved.ok) {
@@ -90,6 +92,7 @@ export async function saveContactAction(
       message: "Please fix the highlighted fields.",
       fieldErrors: { photo: resolved.error },
       values,
+      addressValues,
     };
   }
   const photo = resolved.photo;
@@ -100,13 +103,17 @@ export async function saveContactAction(
   // Echo the resolved photo so a failed submit keeps the pending upload.
   const echoed = { ...values, photo: photo ?? undefined };
 
-  const parsed = contactInputSchema.safeParse({ ...values, photo: photo ?? null });
+  const parsed = contactInputSchema.safeParse({
+    ...values,
+    photo: photo ?? null,
+    addresses: addressValues,
+  });
   if (!parsed.success) {
     return {
       status: "error",
       message: "Please fix the highlighted fields.",
       fieldErrors: zodFieldErrors(parsed.error),
-      values: echoed, photoRemoved,
+      values: echoed, addressValues, photoRemoved,
     };
   }
 
@@ -125,7 +132,7 @@ export async function saveContactAction(
     }
   } catch (error) {
     if (error instanceof ApiUnreachableError) {
-      return { status: "error", message: UNREACHABLE, values: echoed, photoRemoved };
+      return { status: "error", message: UNREACHABLE, values: echoed, addressValues, photoRemoved };
     }
     if (error instanceof ApiError) {
       if (error.status === 409) {
@@ -135,7 +142,7 @@ export async function saveContactAction(
           fieldErrors: {
             email: apiErrorMessage(error, "This email is already in use."),
           },
-          values: echoed, photoRemoved,
+          values: echoed, addressValues, photoRemoved,
         };
       }
       if (error.status === 422) {
@@ -143,13 +150,13 @@ export async function saveContactAction(
           status: "error",
           message: "The API rejected these values.",
           fieldErrors: toFieldErrors(error),
-          values: echoed, photoRemoved,
+          values: echoed, addressValues, photoRemoved,
         };
       }
       return {
         status: "error",
         message: apiErrorMessage(error, "The contact could not be saved."),
-        values: echoed, photoRemoved,
+        values: echoed, addressValues, photoRemoved,
       };
     }
     throw error;

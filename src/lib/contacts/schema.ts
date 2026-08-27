@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { ContactInput } from "./types";
+import { ADDRESS_TYPES } from "./types";
+import type { AddressFormValues, AddressInput, ContactInput } from "./types";
 
 /**
  * Client/server-shared validation for the contact form.
@@ -28,6 +29,16 @@ function requiredText(max: number, label: string) {
     .max(max, `${label} must be ${max} characters or fewer`);
 }
 
+/** One address row; mirrors the API's `AddressCreate`. */
+export const addressInputSchema = z.object({
+  type: z.enum(ADDRESS_TYPES),
+  street: optionalText(300, "Street"),
+  city: optionalText(120, "City"),
+  state: optionalText(120, "State"),
+  postal_code: optionalText(20, "Postal code"),
+  country: optionalText(120, "Country"),
+}) satisfies z.ZodType<AddressInput, unknown>;
+
 export const contactInputSchema = z.object({
   first_name: requiredText(100, "First name"),
   last_name: requiredText(100, "Last name"),
@@ -41,11 +52,10 @@ export const contactInputSchema = z.object({
   phone: optionalText(40, "Phone"),
   company: optionalText(200, "Company"),
   job_title: optionalText(200, "Job title"),
-  address: optionalText(300, "Address"),
-  city: optionalText(120, "City"),
-  state: optionalText(120, "State"),
-  postal_code: optionalText(20, "Postal code"),
-  country: optionalText(120, "Country"),
+  addresses: z
+    .array(addressInputSchema)
+    .max(10, "A contact can have at most 10 addresses")
+    .default([]),
   notes: z
     .string()
     .trim()
@@ -85,8 +95,11 @@ export function zodFieldErrors(
 /* Form metadata — one source of truth for the fields and their limits */
 /* ------------------------------------------------------------------ */
 
+/** The flat text fields; photo and addresses have dedicated form sections. */
+export type ContactTextField = Exclude<keyof ContactInput, "photo" | "addresses">;
+
 export interface ContactFieldSpec {
-  name: keyof ContactInput;
+  name: ContactTextField;
   label: string;
   type?: "text" | "email" | "tel" | "textarea";
   required?: boolean;
@@ -164,48 +177,6 @@ export const CONTACT_FIELD_GROUPS: ContactFieldGroup[] = [
     ],
   },
   {
-    title: "Address",
-    description: "Optional postal details.",
-    fields: [
-      {
-        name: "address",
-        label: "Street address",
-        maxLength: 300,
-        placeholder: "1 Market St, Suite 400",
-        autoComplete: "street-address",
-        wide: true,
-      },
-      {
-        name: "city",
-        label: "City",
-        maxLength: 120,
-        placeholder: "San Francisco",
-        autoComplete: "address-level2",
-      },
-      {
-        name: "state",
-        label: "State / region",
-        maxLength: 120,
-        placeholder: "CA",
-        autoComplete: "address-level1",
-      },
-      {
-        name: "postal_code",
-        label: "Postal code",
-        maxLength: 20,
-        placeholder: "94105",
-        autoComplete: "postal-code",
-      },
-      {
-        name: "country",
-        label: "Country",
-        maxLength: 120,
-        placeholder: "USA",
-        autoComplete: "country-name",
-      },
-    ],
-  },
-  {
     title: "Notes",
     description: "Anything worth remembering. No length limit.",
     fields: [
@@ -226,16 +197,39 @@ export const CONTACT_FIELDS: ContactFieldSpec[] = CONTACT_FIELD_GROUPS.flatMap(
 );
 
 /**
- * Pull the contact fields out of a submitted form, as raw strings. The photo
- * is not a text field — the server action resolves it from the File directly.
+ * Pull the flat contact fields out of a submitted form, as raw strings. The
+ * photo (a File) and the address rows (indexed names) are extracted
+ * separately by the server action.
  */
 export function formDataToValues(
   formData: FormData,
-): Record<Exclude<keyof ContactInput, "photo">, string> {
+): Record<Exclude<keyof ContactInput, "photo" | "addresses">, string> {
   return Object.fromEntries(
     CONTACT_FIELDS.map((field) => [
       field.name,
       String(formData.get(field.name) ?? ""),
     ]),
-  ) as Record<Exclude<keyof ContactInput, "photo">, string>;
+  ) as Record<Exclude<keyof ContactInput, "photo" | "addresses">, string>;
+}
+
+/**
+ * Pull the indexed address rows (`addresses[0][city]`, …) out of a submitted
+ * form, as raw strings. Row order follows the form; a row exists as long as
+ * its `type` select was submitted.
+ */
+export function formDataToAddresses(formData: FormData): AddressFormValues[] {
+  const rows: AddressFormValues[] = [];
+  for (let index = 0; formData.has(`addresses[${index}][type]`); index += 1) {
+    const value = (name: keyof AddressInput) =>
+      String(formData.get(`addresses[${index}][${name}]`) ?? "");
+    rows.push({
+      type: value("type"),
+      street: value("street"),
+      city: value("city"),
+      state: value("state"),
+      postal_code: value("postal_code"),
+      country: value("country"),
+    });
+  }
+  return rows;
 }

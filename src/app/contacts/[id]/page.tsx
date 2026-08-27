@@ -8,6 +8,7 @@ import DeleteContactButton from "@/components/contacts/DeleteContactButton";
 import { buttonClasses } from "@/components/ui/Button";
 import { getContact } from "@/lib/contacts/api";
 import { addressLine, formatTimestamp, jobLine } from "@/lib/contacts/format";
+import { ADDRESS_TYPES } from "@/lib/contacts/types";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -43,7 +44,11 @@ export default async function ContactDetailPage({ params }: PageProps) {
   if (!contact) notFound();
 
   const subtitle = jobLine(contact);
-  const address = addressLine(contact);
+  // Group addresses by type, in the canonical Home / Work / Other order.
+  const addressesByType = ADDRESS_TYPES.map((type) => ({
+    type,
+    addresses: contact.addresses.filter((address) => address.type === type),
+  })).filter((group) => group.addresses.length > 0);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
@@ -102,13 +107,43 @@ export default async function ContactDetailPage({ params }: PageProps) {
         </Row>
         <Row label="Company">{contact.company}</Row>
         <Row label="Job title">{contact.job_title}</Row>
-        <Row label="Address">{address}</Row>
         <Row label="Notes">
           {contact.notes ? (
             <span className="whitespace-pre-wrap">{contact.notes}</span>
           ) : null}
         </Row>
       </dl>
+
+      <section className="rounded-lg border border-border bg-card">
+        <h2 className="border-b border-hairline px-4 py-3 font-display text-sm font-semibold text-foreground">
+          Addresses
+        </h2>
+        {addressesByType.length ? (
+          <ul>
+            {addressesByType.flatMap((group) =>
+              group.addresses.map((address) => (
+                <li
+                  key={address.id}
+                  className="flex items-start gap-3 border-b border-hairline px-4 py-3 last:border-b-0"
+                >
+                  <span className="mt-0.5 inline-flex shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                    {group.type}
+                  </span>
+                  <span className="break-words text-sm text-foreground">
+                    {addressLine(address) ?? (
+                      <span className="text-muted-foreground/50">—</span>
+                    )}
+                  </span>
+                </li>
+              )),
+            )}
+          </ul>
+        ) : (
+          <p className="px-4 py-3 text-sm text-muted-foreground/50">
+            No addresses yet.
+          </p>
+        )}
+      </section>
 
       <dl className="rounded-lg border border-border bg-card/50 text-[13px]">
         <Row label="ID">
