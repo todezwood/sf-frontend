@@ -21,10 +21,10 @@ export interface ContactStats {
 
 /** Display metadata for the stat block, in card order. */
 export const STAT_LABELS: { key: keyof ContactStats; label: string }[] = [
-  { key: "reach", label: "RCH" },
-  { key: "intel", label: "INT" },
-  { key: "footprint", label: "GEO" },
-  { key: "visual", label: "VIS" },
+  { key: "reach", label: "Reach" },
+  { key: "intel", label: "Intel" },
+  { key: "footprint", label: "Footprint" },
+  { key: "visual", label: "Visual" },
 ];
 
 const MAX = 99;
