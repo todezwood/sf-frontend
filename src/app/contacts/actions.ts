@@ -29,29 +29,43 @@ const UNREACHABLE =
   "Could not reach the Contacts API. Check that the backend is running.";
 
 /**
+ * The client-side check mirrors this, but only after hydration — a plain
+ * pre-hydration POST reaches us with whatever file the browser allowed, so
+ * the size must be enforced here, before the base64 encode inflates it.
+ */
+const MAX_PHOTO_FILE_BYTES = 1_000_000;
+
+type ResolvedPhoto =
+  | { ok: true; photo: string | null | undefined }
+  | { ok: false; error: string };
+
+/**
  * Resolve the photo for a save, in priority order: a newly uploaded file, an
  * explicit "remove photo" request, then a photo carried over from a failed
  * submit (file inputs cannot be re-populated on a re-render). With none of
- * those, an edit returns `undefined` — "leave the stored photo untouched" —
- * which the caller honors by saving through PATCH instead of PUT.
+ * those, an edit resolves to `undefined` — "leave the stored photo untouched"
+ * — which the caller honors by saving through PATCH instead of PUT.
  */
 async function resolvePhoto(
   formData: FormData,
   contactId: number | null,
-): Promise<string | null | undefined> {
+): Promise<ResolvedPhoto> {
   const file = formData.get("photo");
   if (file instanceof File && file.size > 0) {
+    if (file.size > MAX_PHOTO_FILE_BYTES) {
+      return { ok: false, error: "Photo must be 1 MB or smaller." };
+    }
     const bytes = Buffer.from(await file.arrayBuffer());
-    return `data:${file.type};base64,${bytes.toString("base64")}`;
+    return { ok: true, photo: `data:${file.type};base64,${bytes.toString("base64")}` };
   }
   if (formData.get("remove_photo") === "on") {
-    return null;
+    return { ok: true, photo: null };
   }
   const pending = formData.get("pending_photo");
   if (typeof pending === "string" && pending) {
-    return pending;
+    return { ok: true, photo: pending };
   }
-  return contactId === null ? null : undefined;
+  return { ok: true, photo: contactId === null ? null : undefined };
 }
 
 /**
@@ -66,7 +80,22 @@ export async function saveContactAction(
   formData: FormData,
 ): Promise<FormState> {
   const values = formDataToValues(formData);
-  const photo = await resolvePhoto(formData, contactId);
+
+  const resolved = await resolvePhoto(formData, contactId);
+  if (!resolved.ok) {
+    // Never echo a rejected upload — it would ride every retry as hidden
+    // state and blow the request body budget all over again.
+    return {
+      status: "error",
+      message: "Please fix the highlighted fields.",
+      fieldErrors: { photo: resolved.error },
+      values,
+    };
+  }
+  const photo = resolved.photo;
+  // `null` on an edit is an explicit removal; remember it across a failed
+  // submit so a corrected retry still removes the photo.
+  const photoRemoved = contactId !== null && photo === null;
 
   // Echo the resolved photo so a failed submit keeps the pending upload.
   const echoed = { ...values, photo: photo ?? undefined };
@@ -77,7 +106,7 @@ export async function saveContactAction(
       status: "error",
       message: "Please fix the highlighted fields.",
       fieldErrors: zodFieldErrors(parsed.error),
-      values: echoed,
+      values: echoed, photoRemoved,
     };
   }
 
@@ -96,7 +125,7 @@ export async function saveContactAction(
     }
   } catch (error) {
     if (error instanceof ApiUnreachableError) {
-      return { status: "error", message: UNREACHABLE, values: echoed };
+      return { status: "error", message: UNREACHABLE, values: echoed, photoRemoved };
     }
     if (error instanceof ApiError) {
       if (error.status === 409) {
@@ -106,7 +135,7 @@ export async function saveContactAction(
           fieldErrors: {
             email: apiErrorMessage(error, "This email is already in use."),
           },
-          values: echoed,
+          values: echoed, photoRemoved,
         };
       }
       if (error.status === 422) {
@@ -114,13 +143,13 @@ export async function saveContactAction(
           status: "error",
           message: "The API rejected these values.",
           fieldErrors: toFieldErrors(error),
-          values: echoed,
+          values: echoed, photoRemoved,
         };
       }
       return {
         status: "error",
         message: apiErrorMessage(error, "The contact could not be saved."),
-        values: echoed,
+        values: echoed, photoRemoved,
       };
     }
     throw error;

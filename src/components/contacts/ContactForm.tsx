@@ -32,12 +32,15 @@ function PhotoField({
   contact,
   message,
   pendingPhoto,
+  removeRequested,
   onFileChange,
 }: {
   contact?: Contact;
   message?: string;
   /** Photo carried over from a failed submit — file inputs cannot re-populate. */
   pendingPhoto?: string;
+  /** Removal asked for on a failed submit; keeps the checkbox checked. */
+  removeRequested?: boolean;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
@@ -99,6 +102,7 @@ function PhotoField({
               <input
                 type="checkbox"
                 name="remove_photo"
+                defaultChecked={removeRequested}
                 className="h-3.5 w-3.5 accent-current"
               />
               Remove current photo
@@ -197,6 +201,7 @@ export default function ContactForm({
           (photoDirty ? undefined : state.fieldErrors?.photo)
         }
         pendingPhoto={state.values?.photo}
+        removeRequested={state.photoRemoved}
         onFileChange={handlePhotoChange}
       />
 
