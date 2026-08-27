@@ -43,6 +43,15 @@ const gitSha =
 // so it needs a Node runtime. `output: "export"` is deliberately not offered.
 const nextConfig: NextConfig = {
   trailingSlash: true,
+  // Contact photos travel through the save action as multipart uploads; the
+  // default 1MB body cap would reject them. 2mb brackets the API's own cap
+  // (~1.4MB decoded) so oversized uploads fail at the validation layer with a
+  // readable message instead of a raw 413.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "2mb",
+    },
+  },
   // Hosts allowed to load dev-only resources (/_next/hmr, /_next/static…) when the
   // dev server is reached from something other than localhost — a phone or another
   // machine on the LAN. Matched on hostname alone: ports are ignored, so this has

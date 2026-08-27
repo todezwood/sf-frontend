@@ -8,12 +8,15 @@ const SIZES = {
   lg: "h-14 w-14 text-lg",
 } as const;
 
-/** Initials bubble, tinted with a hue derived from the contact's email. */
+/**
+ * Circular contact avatar: the stored photo when there is one, otherwise an
+ * initials bubble tinted with a hue derived from the contact's email.
+ */
 export default function ContactAvatar({
   contact,
   size = "md",
 }: {
-  contact: Pick<Contact, "first_name" | "last_name" | "email">;
+  contact: Pick<Contact, "first_name" | "last_name" | "email" | "photo">;
   size?: keyof typeof SIZES;
 }) {
   const style = {
@@ -24,9 +27,20 @@ export default function ContactAvatar({
     <span
       aria-hidden="true"
       style={style}
-      className={`contact-avatar inline-flex shrink-0 select-none items-center justify-center rounded-full font-display font-semibold ${SIZES[size]}`}
+      className={`contact-avatar inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full font-display font-semibold ${
+        contact.photo ? "ring-1 ring-border" : ""
+      } ${SIZES[size]}`}
     >
-      {initials(contact)}
+      {contact.photo ? (
+        // eslint-disable-next-line @next/next/no-img-element -- data URLs gain nothing from next/image
+        <img
+          src={contact.photo}
+          alt=""
+          className="h-full w-full rounded-full object-cover"
+        />
+      ) : (
+        initials(contact)
+      )}
     </span>
   );
 }

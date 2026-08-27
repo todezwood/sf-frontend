@@ -9,6 +9,7 @@ import {
   deleteContact,
   replaceContact,
   toFieldErrors,
+  updateContact,
 } from "@/lib/contacts/api";
 import {
   contactInputSchema,
@@ -28,6 +29,32 @@ const UNREACHABLE =
   "Could not reach the Contacts API. Check that the backend is running.";
 
 /**
+ * Resolve the photo for a save, in priority order: a newly uploaded file, an
+ * explicit "remove photo" request, then a photo carried over from a failed
+ * submit (file inputs cannot be re-populated on a re-render). With none of
+ * those, an edit returns `undefined` — "leave the stored photo untouched" —
+ * which the caller honors by saving through PATCH instead of PUT.
+ */
+async function resolvePhoto(
+  formData: FormData,
+  contactId: number | null,
+): Promise<string | null | undefined> {
+  const file = formData.get("photo");
+  if (file instanceof File && file.size > 0) {
+    const bytes = Buffer.from(await file.arrayBuffer());
+    return `data:${file.type};base64,${bytes.toString("base64")}`;
+  }
+  if (formData.get("remove_photo") === "on") {
+    return null;
+  }
+  const pending = formData.get("pending_photo");
+  if (typeof pending === "string" && pending) {
+    return pending;
+  }
+  return contactId === null ? null : undefined;
+}
+
+/**
  * Create (when `contactId` is null) or fully replace a contact.
  *
  * Bind the id at the call site — `saveContactAction.bind(null, contact.id)` —
@@ -39,26 +66,37 @@ export async function saveContactAction(
   formData: FormData,
 ): Promise<FormState> {
   const values = formDataToValues(formData);
+  const photo = await resolvePhoto(formData, contactId);
 
-  const parsed = contactInputSchema.safeParse(values);
+  // Echo the resolved photo so a failed submit keeps the pending upload.
+  const echoed = { ...values, photo: photo ?? undefined };
+
+  const parsed = contactInputSchema.safeParse({ ...values, photo: photo ?? null });
   if (!parsed.success) {
     return {
       status: "error",
       message: "Please fix the highlighted fields.",
       fieldErrors: zodFieldErrors(parsed.error),
-      values,
+      values: echoed,
     };
   }
 
   let saved: Contact;
   try {
-    saved =
-      contactId === null
-        ? await createContact(parsed.data)
-        : await replaceContact(contactId, parsed.data);
+    if (contactId === null) {
+      saved = await createContact(parsed.data);
+    } else if (photo === undefined) {
+      // No photo change: PATCH writes every form field but omits the photo,
+      // so the stored one is preserved without re-sending megabytes of it.
+      const patch: Partial<typeof parsed.data> = { ...parsed.data };
+      delete patch.photo;
+      saved = await updateContact(contactId, patch);
+    } else {
+      saved = await replaceContact(contactId, parsed.data);
+    }
   } catch (error) {
     if (error instanceof ApiUnreachableError) {
-      return { status: "error", message: UNREACHABLE, values };
+      return { status: "error", message: UNREACHABLE, values: echoed };
     }
     if (error instanceof ApiError) {
       if (error.status === 409) {
@@ -68,7 +106,7 @@ export async function saveContactAction(
           fieldErrors: {
             email: apiErrorMessage(error, "This email is already in use."),
           },
-          values,
+          values: echoed,
         };
       }
       if (error.status === 422) {
@@ -76,13 +114,13 @@ export async function saveContactAction(
           status: "error",
           message: "The API rejected these values.",
           fieldErrors: toFieldErrors(error),
-          values,
+          values: echoed,
         };
       }
       return {
         status: "error",
         message: apiErrorMessage(error, "The contact could not be saved."),
-        values,
+        values: echoed,
       };
     }
     throw error;

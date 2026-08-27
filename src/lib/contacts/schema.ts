@@ -52,6 +52,17 @@ export const contactInputSchema = z.object({
     .transform((value) => value || null)
     .nullable()
     .default(null),
+  // Mirrors the API's photo rules: an image-only data URL (no SVG), bounded
+  // in size. The value arrives from the server action, not a text input.
+  photo: z
+    .string()
+    .regex(
+      /^data:image\/(png|jpeg|webp|gif);base64,.+/,
+      "Photo must be a PNG, JPEG, WebP, or GIF image",
+    )
+    .max(2_000_000, "Photo is too large — about 1.5 MB is the maximum")
+    .nullable()
+    .default(null),
 }) satisfies z.ZodType<ContactInput, unknown>;
 
 export type ContactFormValues = z.input<typeof contactInputSchema>;
@@ -214,14 +225,17 @@ export const CONTACT_FIELDS: ContactFieldSpec[] = CONTACT_FIELD_GROUPS.flatMap(
   (group) => group.fields,
 );
 
-/** Pull the contact fields out of a submitted form, as raw strings. */
+/**
+ * Pull the contact fields out of a submitted form, as raw strings. The photo
+ * is not a text field — the server action resolves it from the File directly.
+ */
 export function formDataToValues(
   formData: FormData,
-): Record<keyof ContactInput, string> {
+): Record<Exclude<keyof ContactInput, "photo">, string> {
   return Object.fromEntries(
     CONTACT_FIELDS.map((field) => [
       field.name,
       String(formData.get(field.name) ?? ""),
     ]),
-  ) as Record<keyof ContactInput, string>;
+  ) as Record<Exclude<keyof ContactInput, "photo">, string>;
 }
