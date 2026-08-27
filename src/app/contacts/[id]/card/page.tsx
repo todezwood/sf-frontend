@@ -19,13 +19,19 @@ function parseId(raw: string): number {
 }
 
 /**
- * A QR code at the default error-correction level holds ~2.3 KB, while notes
- * and addresses are large enough that a valid contact can exceed it. Try the
- * richest payload first and shed the bulkiest sections until one fits.
- * There is no guaranteed-to-fit payload: the schema caps count characters
- * while QR capacity counts UTF-8 octets, so identity fields full of
- * multi-byte text can outgrow even the roomiest symbol. When that happens
- * the card renders without a QR and points at the vCard download instead.
+ * The QR has two ceilings, and the card sheds vCard sections (notes first,
+ * then addresses) until the payload clears both:
+ *
+ * - Capacity: a version-13 symbol at correction level L holds 425 bytes.
+ * - Density: the card shows the code in a 128px box, and a phone camera
+ *   wants roughly 1.5 CSS px per module, so anything denser than version
+ *   13 (69 modules a side) is treated exactly like an over-capacity
+ *   payload even though the QR format itself could encode it.
+ *
+ * Neither ceiling is guaranteed reachable — the schema caps count UTF-16
+ * characters while QR capacity counts UTF-8 octets, so identity fields full
+ * of multi-byte text can outgrow every tier. The card then renders without
+ * a QR and points at the vCard download instead.
  */
 const QR_PAYLOADS: VCardOptions[] = [
   {},
@@ -33,18 +39,24 @@ const QR_PAYLOADS: VCardOptions[] = [
   { includeNotes: false, includeAddresses: false },
 ];
 
+const MAX_QR_VERSION = 13;
+
 async function contactQrCode(contact: Contact): Promise<string | null> {
-  for (const [index, options] of QR_PAYLOADS.entries()) {
-    const lastResort = index === QR_PAYLOADS.length - 1;
+  for (const options of QR_PAYLOADS) {
+    const payload = contactToVCard(contact, options);
     try {
-      return await QRCode.toDataURL(contactToVCard(contact, options), {
+      // Level L is the norm for on-screen codes — a backlit screen never
+      // takes the damage higher levels guard against — and buys the most
+      // capacity per module.
+      const symbol = QRCode.create(payload, { errorCorrectionLevel: "L" });
+      if (symbol.version > MAX_QR_VERSION) continue;
+      return await QRCode.toDataURL(payload, {
         margin: 1,
-        width: 240,
-        // The roomiest correction level buys the last attempt ~600 more bytes.
-        errorCorrectionLevel: lastResort ? "L" : "M",
+        width: 256,
+        errorCorrectionLevel: "L",
       });
     } catch {
-      // Payload too large for the QR symbol — retry with a slimmer vCard.
+      // Too large for any QR symbol at all — retry with a slimmer vCard.
     }
   }
   return null;

@@ -83,7 +83,7 @@ export default function ContactCard({
           <img
             src={qrDataUrl}
             alt={`QR code holding ${contact.full_name}'s contact card`}
-            className="h-24 w-24 shrink-0 rounded-md bg-white p-1.5"
+            className="h-32 w-32 shrink-0 rounded-md bg-white p-1.5"
           />
         ) : null}
       </div>
