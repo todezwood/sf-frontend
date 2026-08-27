@@ -15,7 +15,6 @@ import {
   type Address,
   type AddressFormValues,
   type Contact,
-  type ContactInput,
   type FormState,
 } from "@/lib/contacts/types";
 
